@@ -1299,13 +1299,13 @@ _KI_DOUBLE = None
 _WI_DOUBLE = None
 _FI_DOUBLE = None
 
-_BIT_GENERATOR = np.random.PCG64(seed=42)
-_next_uint64 = _BIT_GENERATOR.cffi.next_uint64
-_next_double = _BIT_GENERATOR.cffi.next_double
-_state_address = _BIT_GENERATOR.cffi.state_address
-_state_ptr = _FFI.cast("uint8_t(*)[128]", _state_address)
-_state_bytes = np.frombuffer(_FFI.buffer(_state_ptr), dtype=np.uint8)
-_state_uint64 = _state_bytes.view(np.uint64)[3:7]
+# _BIT_GENERATOR = np.random.PCG64(seed=42)
+# _next_uint64 = _BIT_GENERATOR.cffi.next_uint64
+# _next_double = _BIT_GENERATOR.cffi.next_double
+# _state_address = _BIT_GENERATOR.cffi.state_address
+# _state_ptr = _FFI.cast("uint8_t(*)[128]", _state_address)
+# _state_bytes = np.frombuffer(_FFI.buffer(_state_ptr), dtype=np.uint8)
+# _state_uint64 = _state_bytes.view(np.uint64)[3:7]
 
 
 def _load_ziggurat_tables():
@@ -1346,7 +1346,7 @@ _load_ziggurat_tables()
 
 
 @nb.njit
-def _single_random_standard_normal() -> float:
+def _single_random_standard_normal(_next_double, _next_uint64, _state_address) -> float:
     """
     Return one sample from the standard normal distribution, :math:`\\mathcal{N}(0, 1)`.
 
@@ -1411,7 +1411,10 @@ def _single_random_standard_normal() -> float:
 def _several_random_standard_normal(
     state_array: np.ndarray,
     state_bytes: np.ndarray,
-    size: int = 1,
+    size: int,
+    _next_double,
+    _next_uint64,
+    _state_address,
 ) -> np.ndarray:
     """
     Draw ``size`` standard-normal samples for a single RNG state row.
@@ -1455,7 +1458,7 @@ def _several_random_standard_normal(
     try:
         result = np.empty(size, dtype=np.float64)
         for n in range(size):
-            result[n] = _single_random_standard_normal()
+            result[n] = _single_random_standard_normal(_next_double, _next_uint64, _state_address)
         return result
     finally:
         # write back the updated state into the given state_array
@@ -1466,7 +1469,10 @@ def _several_random_standard_normal(
 def _vector_random_standard_normal(
     state_array: np.ndarray,
     state_bytes: np.ndarray,
-    shape: tuple[int, ...] = (1,),
+    shape: tuple[int, ...],
+    _next_double,
+    _next_uint64,
+    _state_address,
 ) -> np.ndarray:
     """
     Draw standard-normal samples for every row of *state_array*.
@@ -1495,7 +1501,14 @@ def _vector_random_standard_normal(
 
     result = np.empty((state_array.shape[0], flat_size), dtype=np.float64)
     for idx in range(state_array.shape[0]):
-        result[idx] = _several_random_standard_normal(state_array[idx], state_bytes, size=flat_size)
+        result[idx] = _several_random_standard_normal(
+            state_array[idx],
+            state_bytes,
+            size=flat_size,
+            _next_double=_next_double,
+            _next_uint64=_next_uint64,
+            _state_address=_state_address,
+        )
     return result
 
 
@@ -1504,7 +1517,10 @@ def _selected_vector_random_standard_normal(
     selected_positions: np.ndarray,
     state_array: np.ndarray,
     state_bytes: np.ndarray,
-    shape: tuple[int, ...] = (1,),
+    shape: tuple[int, ...],
+    _next_double,
+    _next_uint64,
+    _state_address,
 ) -> np.ndarray:
     """
     Draw standard-normal samples for a subset of rows of *state_array*.
@@ -1544,7 +1560,12 @@ def _selected_vector_random_standard_normal(
 
     for idx in range(n):
         flat[idx] = _several_random_standard_normal(
-            state_array[selected_positions[idx]], state_bytes, size=flat_size
+            state_array[selected_positions[idx]],
+            state_bytes,
+            size=flat_size,
+            _next_double=_next_double,
+            _next_uint64=_next_uint64,
+            _state_address=_state_address,
         )
 
     # Reshape so the trailing dimensions match the caller-provided `shape`.
@@ -1553,72 +1574,16 @@ def _selected_vector_random_standard_normal(
     return flat
 
 
-def vector_random_standard_normal(
-    state_array: np.ndarray,
-    selected_positions: np.ndarray | None = None,
-    shape: int | tuple[int, ...] = (1,),
-) -> np.ndarray:
-    """
-    Draw standard-normal samples for agents, optionally restricted to a subset.
-
-    Parameters
-    ----------
-    state_array : np.ndarray
-        2-D ``uint64`` array of shape ``(n_agents, ≥4)`` where each row holds
-        the PCG64 state for one agent.  Mutated in-place.
-    selected_positions : np.ndarray or None, optional
-        1-D integer array of row indices into *state_array*.  When provided,
-        only these agents are sampled; otherwise all agents are sampled.
-    shape : int or tuple of int, optional
-        Shape of the per-agent sample block.  A plain ``int`` is treated as a
-        1-element tuple, e.g. ``3`` → ``(3,)``.  Defaults to ``(1,)``.
-
-    Returns
-    -------
-    np.ndarray
-        ``float64`` array of shape
-        ``(n_selected, *shape)`` when *selected_positions* is given, or
-        ``(n_agents, *shape)`` otherwise.
-    """
-    global _state_bytes
-    if isinstance(shape, int):
-        shape = (shape,)
-    if selected_positions is not None:
-        return _selected_vector_random_standard_normal(
-            selected_positions, state_array, state_bytes=_state_bytes, shape=shape
-        ).reshape(-1, *shape)
-    else:
-        return _vector_random_standard_normal(
-            state_array, state_bytes=_state_bytes, shape=shape
-        ).reshape(-1, *shape)
-
-
 ### UNIFORM
-
-
-@nb.njit
-def _single_random_standard_uniform() -> float:
-    """
-    Return one sample from the standard uniform distribution U[0, 1).
-
-    Uses the module-level PCG64 bit-generator directly via its CFFI pointer
-    (``_state_address``).  Advances the global RNG state in-place.
-
-    Returns
-    -------
-    float
-        A single draw from U[0, 1).
-    """
-
-    # write into the BIT_GENERATOR's state from the given state_array
-    return _next_double(_state_address)
 
 
 @nb.njit
 def _several_random_standard_uniform(
     state_array: np.ndarray,
     state_bytes: np.ndarray,
-    size: int = 1,
+    size: int,
+    _next_double,
+    _state_address,
 ) -> np.ndarray:
     """
     Draw ``size`` standard-uniform samples for a single RNG state row.
@@ -1662,7 +1627,9 @@ def _several_random_standard_uniform(
 def _vector_random_standard_uniform(
     state_array: np.ndarray,
     state_bytes: np.ndarray,
-    shape: tuple[int, ...] = (1,),
+    shape: tuple[int, ...],
+    _next_double,
+    _state_address,
 ) -> np.ndarray:
     """
     Draw standard-uniform samples for every row of *state_array*.
@@ -1692,7 +1659,13 @@ def _vector_random_standard_uniform(
 
     result = np.empty((state_array.shape[0], flat_size), dtype=np.float64)
     for idx in range(state_array.shape[0]):
-        result[idx] = _several_random_standard_uniform(state_array[idx], state_bytes, flat_size)
+        result[idx] = _several_random_standard_uniform(
+            state_array[idx],
+            state_bytes,
+            flat_size,
+            _next_double,
+            _state_address,
+        )
     return result
 
 
@@ -1701,7 +1674,9 @@ def _selected_vector_random_standard_uniform(
     selected_positions: np.ndarray,
     state_array: np.ndarray,
     state_bytes: np.ndarray,
-    shape: tuple[int, ...] = (1,),
+    shape: tuple[int, ...],
+    _next_double,
+    _state_address,
 ) -> np.ndarray:
     """
     Draw standard-uniform samples for a subset of rows of *state_array*.
@@ -1736,53 +1711,13 @@ def _selected_vector_random_standard_uniform(
     result = np.empty((selected_positions.shape[0], flat_size), dtype=np.float64)
     for idx in range(selected_positions.shape[0]):
         result[idx] = _several_random_standard_uniform(
-            state_array[selected_positions[idx]], state_bytes, flat_size
+            state_array[selected_positions[idx]],
+            state_bytes,
+            flat_size,
+            _next_double,
+            _state_address,
         )
     return result
-
-
-def vector_random_standard_uniform(
-    state_array: np.ndarray,
-    selected_positions: np.ndarray | None = None,
-    shape: int | tuple[int, ...] = 1,
-) -> np.ndarray:
-    """
-    Draw standard-uniform samples for agents, optionally restricted to a subset.
-
-    Parameters
-    ----------
-    state_array : np.ndarray
-        2-D ``uint64`` array of shape ``(n_agents, ≥4)`` where each row holds
-        the PCG64 state for one agent.  Mutated in-place.
-    selected_positions : np.ndarray or None, optional
-        1-D integer array of row indices into *state_array*.  When provided,
-        only these agents are sampled; otherwise all agents are sampled.
-    shape : int or tuple of int, optional
-        Shape of the per-agent sample block.  A plain ``int`` is treated as a
-        1-element tuple, e.g. ``3`` → ``(3,)``.  Defaults to ``1``, i.e. one
-        scalar draw per agent.
-
-    Returns
-    -------
-    np.ndarray
-        ``float64`` array of shape
-        ``(n_selected, *shape)`` when *selected_positions* is given, or
-        ``(n_agents, *shape)`` otherwise; values drawn from U[0, 1).
-    """
-    global _state_bytes
-    if isinstance(shape, int):
-        shape = (shape,)
-    if selected_positions is not None:
-        return _selected_vector_random_standard_uniform(
-            selected_positions,
-            state_array,
-            state_bytes=_state_bytes,
-            shape=shape,
-        ).reshape(-1, *shape)
-    else:
-        return _vector_random_standard_uniform(
-            state_array, state_bytes=_state_bytes, shape=shape
-        ).reshape(-1, *shape)
 
 
 class FastGenerator:
@@ -1821,3 +1756,102 @@ class FastGenerator:
         self._slice_end = max(positions) + 1
         if self._slice_start + 4 != self._slice_end:
             raise ValueError("the state array is not contiguous")
+
+    def vector_random_standard_normal(
+        self,
+        state_array: np.ndarray,
+        selected_positions: np.ndarray | None = None,
+        shape: int | tuple[int, ...] = (1,),
+    ) -> np.ndarray:
+        """
+        Draw standard-normal samples for agents, optionally restricted to a subset.
+
+        Parameters
+        ----------
+        state_array : np.ndarray
+            2-D ``uint64`` array of shape ``(n_agents, ≥4)`` where each row holds
+            the PCG64 state for one agent.  Mutated in-place.
+        selected_positions : np.ndarray or None, optional
+            1-D integer array of row indices into *state_array*.  When provided,
+            only these agents are sampled; otherwise all agents are sampled.
+        shape : int or tuple of int, optional
+            Shape of the per-agent sample block.  A plain ``int`` is treated as a
+            1-element tuple, e.g. ``3`` → ``(3,)``.  Defaults to ``(1,)``.
+
+        Returns
+        -------
+        np.ndarray
+            ``float64`` array of shape
+            ``(n_selected, *shape)`` when *selected_positions* is given, or
+            ``(n_agents, *shape)`` otherwise.
+        """
+        if isinstance(shape, int):
+            shape = (shape,)
+        if selected_positions is not None:
+            return _selected_vector_random_standard_normal(
+                selected_positions,
+                state_array,
+                state_bytes=self._state_bytes,
+                shape=shape,
+                _next_double=self._next_double,
+                _next_uint64=self._next_uint64,
+                _state_address=self._state_address,
+            ).reshape(-1, *shape)
+        else:
+            return _vector_random_standard_normal(
+                state_array,
+                state_bytes=self._state_bytes,
+                shape=shape,
+                _next_double=self._next_double,
+                _next_uint64=self._next_uint64,
+                _state_address=self._state_address,
+            ).reshape(-1, *shape)
+
+    def vector_random_standard_uniform(
+        self,
+        state_array: np.ndarray,
+        selected_positions: np.ndarray | None = None,
+        shape: int | tuple[int, ...] = 1,
+    ) -> np.ndarray:
+        """
+        Draw standard-uniform samples for agents, optionally restricted to a subset.
+
+        Parameters
+        ----------
+        state_array : np.ndarray
+            2-D ``uint64`` array of shape ``(n_agents, ≥4)`` where each row holds
+            the PCG64 state for one agent.  Mutated in-place.
+        selected_positions : np.ndarray or None, optional
+            1-D integer array of row indices into *state_array*.  When provided,
+            only these agents are sampled; otherwise all agents are sampled.
+        shape : int or tuple of int, optional
+            Shape of the per-agent sample block.  A plain ``int`` is treated as a
+            1-element tuple, e.g. ``3`` → ``(3,)``.  Defaults to ``1``, i.e. one
+            scalar draw per agent.
+
+        Returns
+        -------
+        np.ndarray
+            ``float64`` array of shape
+            ``(n_selected, *shape)`` when *selected_positions* is given, or
+            ``(n_agents, *shape)`` otherwise; values drawn from U[0, 1).
+        """
+        if isinstance(shape, int):
+            shape = (shape,)
+        if selected_positions is not None:
+            return _selected_vector_random_standard_uniform(
+                selected_positions,
+                state_array,
+                state_bytes=self._state_bytes,
+                shape=shape,
+                _next_double=self._next_double,
+                _state_address=self._state_address,
+            ).reshape(-1, *shape)
+        else:
+            return _vector_random_standard_uniform(
+                state_array,
+                state_bytes=self._state_bytes,
+                shape=shape,
+                _next_double=self._next_double,
+                _state_address=self._state_address,
+            ).reshape(-1, *shape)

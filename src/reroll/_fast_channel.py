@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from cffi import FFI
 
-from ._fast_random import vector_random_standard_normal, vector_random_standard_uniform
+from ._fast_random import FastGenerator
 
 # one more than 0xFFFFFFFF so we can wrap using: int64 % _MAX_SEED
 _MAX_SEED = 1 << 32
@@ -73,6 +73,7 @@ class FastChannel:
         self.domain_index = domain_df.index.copy()
         self.step_name = None
         self.step_seed = None
+        self._fast_generator = FastGenerator()
         self._bitgenerator = None
         self._state_array = None
         if step_name:
@@ -253,7 +254,7 @@ class FastChannel:
 
         mu = np.asarray(mu)
         sigma = np.asarray(sigma)
-        result = vector_random_standard_normal(
+        result = self._fast_generator.vector_random_standard_normal(
             self._state_array, selected_positions=selected_positions, shape=size
         )
         result = result * sigma + mu
@@ -301,7 +302,7 @@ class FastChannel:
         assert step_name is not None
         assert step_name == self.step_name
         selected_positions = self._check_valid_df(df)
-        return vector_random_standard_uniform(
+        return self._fast_generator.vector_random_standard_uniform(
             self._state_array, selected_positions=selected_positions, shape=n
         )
 
@@ -363,7 +364,7 @@ class FastChannel:
 
         if replace:
             # draw `total` uniforms per selected row and map to indices in a
-            rands = vector_random_standard_uniform(
+            rands = self._fast_generator.vector_random_standard_uniform(
                 self._state_array,
                 selected_positions=selected_positions,
                 shape=total,
@@ -377,7 +378,7 @@ class FastChannel:
                 raise ValueError("Cannot take a larger sample than population when 'replace=False'")
             # draw n_pop uniforms per selected row; argsort produces a random
             # permutation of [0, n_pop), and we take the first `total` entries.
-            rands = vector_random_standard_uniform(
+            rands = self._fast_generator.vector_random_standard_uniform(
                 self._state_array,
                 selected_positions=selected_positions,
                 shape=n_pop,
