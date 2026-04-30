@@ -1,0 +1,10 @@
+# Changes here will be overwritten by Copier. Do not edit manually.
+_commit: v0.2.25
+_src_path: gh:jlevy/simple-modern-uv
+package_author_email: jeff@driftless.xyz
+package_author_name: Jeffrey Newman
+package_description: A python tool to generate reproducible random values based on
+    a pandas Index
+package_github_org: driftlesslabs
+package_module: reroll
+package_name: reroll
