@@ -1342,15 +1342,6 @@ def _load_ziggurat_tables():
         )
 
 
-# def _next_uint64(bit_generator):
-#     """Return one raw uint64 draw from a numpy BitGenerator."""
-#     return int(bit_generator.random_raw())
-#
-#
-# def _next_double(bit_generator):
-#     """Return a uniform double in [0, 1) using the upper 53 bits of a uint64."""
-#     return (int(bit_generator.random_raw()) >> 11) * (1.0 / (1 << 53))
-
 _load_ziggurat_tables()
 
 
