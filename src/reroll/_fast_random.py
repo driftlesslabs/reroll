@@ -1314,8 +1314,8 @@ class FastGenerator:
         self._next_uint64 = self._bit_generator.cffi.next_uint64
         self._next_double = self._bit_generator.cffi.next_double
         self._state_address = self._bit_generator.cffi.state_address
-        self._state_ptr = _FFI.cast("uint8_t(*)[128]", _state_address)
-        self._state_bytes = np.frombuffer(_FFI.buffer(_state_ptr), dtype=np.uint8)
+        self._state_ptr = _FFI.cast("uint8_t(*)[128]", self._state_address)
+        self._state_bytes = np.frombuffer(_FFI.buffer(self._state_ptr), dtype=np.uint8)
 
 
 def _load_ziggurat_tables():
