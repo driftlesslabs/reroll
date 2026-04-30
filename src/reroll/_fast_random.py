@@ -1415,6 +1415,8 @@ def _several_random_standard_normal(
     _next_double,
     _next_uint64,
     _state_address,
+    _slice_start: int,
+    _slice_end: int,
 ) -> np.ndarray:
     """
     Draw ``size`` standard-normal samples for a single RNG state row.
@@ -1452,7 +1454,7 @@ def _several_random_standard_normal(
     ``idx == 0``) or a wedge-rejection test against ``exp(-x^2/2)``.
     """
     # write into the BIT_GENERATOR's state from the given state_array
-    _state_uint64_ = state_bytes.view(np.uint64)[3:7]
+    _state_uint64_ = state_bytes.view(np.uint64)[_slice_start:_slice_end]
     _state_uint64_[:] = state_array[:4]
 
     try:
@@ -1473,6 +1475,8 @@ def _vector_random_standard_normal(
     _next_double,
     _next_uint64,
     _state_address,
+    _slice_start: int,
+    _slice_end: int,
 ) -> np.ndarray:
     """
     Draw standard-normal samples for every row of *state_array*.
@@ -1508,6 +1512,8 @@ def _vector_random_standard_normal(
             _next_double=_next_double,
             _next_uint64=_next_uint64,
             _state_address=_state_address,
+            _slice_start=_slice_start,
+            _slice_end=_slice_end,
         )
     return result
 
@@ -1521,6 +1527,8 @@ def _selected_vector_random_standard_normal(
     _next_double,
     _next_uint64,
     _state_address,
+    _slice_start: int,
+    _slice_end: int,
 ) -> np.ndarray:
     """
     Draw standard-normal samples for a subset of rows of *state_array*.
@@ -1566,6 +1574,8 @@ def _selected_vector_random_standard_normal(
             _next_double=_next_double,
             _next_uint64=_next_uint64,
             _state_address=_state_address,
+            _slice_start=_slice_start,
+            _slice_end=_slice_end,
         )
 
     # Reshape so the trailing dimensions match the caller-provided `shape`.
@@ -1584,6 +1594,8 @@ def _several_random_standard_uniform(
     size: int,
     _next_double,
     _state_address,
+    _slice_start: int,
+    _slice_end: int,
 ) -> np.ndarray:
     """
     Draw ``size`` standard-uniform samples for a single RNG state row.
@@ -1611,7 +1623,7 @@ def _several_random_standard_uniform(
     """
 
     # write into the BIT_GENERATOR's state from the given state_array
-    _state_uint64_ = state_bytes.view(np.uint64)[3:7]
+    _state_uint64_ = state_bytes.view(np.uint64)[_slice_start:_slice_end]
     _state_uint64_[:] = state_array[:4]
     try:
         result = np.empty(size, dtype=np.float64)
@@ -1630,6 +1642,8 @@ def _vector_random_standard_uniform(
     shape: tuple[int, ...],
     _next_double,
     _state_address,
+    _slice_start: int,
+    _slice_end: int,
 ) -> np.ndarray:
     """
     Draw standard-uniform samples for every row of *state_array*.
@@ -1665,6 +1679,8 @@ def _vector_random_standard_uniform(
             flat_size,
             _next_double,
             _state_address,
+            _slice_start=_slice_start,
+            _slice_end=_slice_end,
         )
     return result
 
@@ -1677,6 +1693,8 @@ def _selected_vector_random_standard_uniform(
     shape: tuple[int, ...],
     _next_double,
     _state_address,
+    _slice_start: int,
+    _slice_end: int,
 ) -> np.ndarray:
     """
     Draw standard-uniform samples for a subset of rows of *state_array*.
@@ -1716,6 +1734,8 @@ def _selected_vector_random_standard_uniform(
             flat_size,
             _next_double,
             _state_address,
+            _slice_start=_slice_start,
+            _slice_end=_slice_end,
         )
     return result
 
@@ -1796,6 +1816,8 @@ class FastGenerator:
                 _next_double=self._next_double,
                 _next_uint64=self._next_uint64,
                 _state_address=self._state_address,
+                _slice_start=self._slice_start,
+                _slice_end=self._slice_end,
             ).reshape(-1, *shape)
         else:
             return _vector_random_standard_normal(
@@ -1805,6 +1827,8 @@ class FastGenerator:
                 _next_double=self._next_double,
                 _next_uint64=self._next_uint64,
                 _state_address=self._state_address,
+                _slice_start=self._slice_start,
+                _slice_end=self._slice_end,
             ).reshape(-1, *shape)
 
     def vector_random_standard_uniform(
@@ -1846,6 +1870,8 @@ class FastGenerator:
                 shape=shape,
                 _next_double=self._next_double,
                 _state_address=self._state_address,
+                _slice_start=self._slice_start,
+                _slice_end=self._slice_end,
             ).reshape(-1, *shape)
         else:
             return _vector_random_standard_uniform(
@@ -1854,4 +1880,6 @@ class FastGenerator:
                 shape=shape,
                 _next_double=self._next_double,
                 _state_address=self._state_address,
+                _slice_start=self._slice_start,
+                _slice_end=self._slice_end,
             ).reshape(-1, *shape)
