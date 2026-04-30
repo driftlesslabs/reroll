@@ -1777,6 +1777,19 @@ class FastGenerator:
         if self._slice_start + 4 != self._slice_end:
             raise ValueError("the state array is not contiguous")
 
+        self._slice_positions = np.asarray(positions) - self._slice_start
+
+    def get_state_array(self, seed) -> np.ndarray:
+        """Get the state array for a given seed, in the order expected by the numba functions."""
+        bit_generator = np.random.PCG64(seed=seed)
+        _state = bit_generator.state["state"]
+        state_array = np.empty(shape=[4], dtype=np.uint64)
+        state_array[self._slice_positions[0]] = _state["state"] & 0xFFFFFFFFFFFFFFFF
+        state_array[self._slice_positions[1]] = _state["state"] >> 64
+        state_array[self._slice_positions[2]] = _state["inc"] & 0xFFFFFFFFFFFFFFFF
+        state_array[self._slice_positions[3]] = _state["inc"] >> 64
+        return state_array
+
     def vector_random_standard_normal(
         self,
         state_array: np.ndarray,

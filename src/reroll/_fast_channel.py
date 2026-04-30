@@ -74,7 +74,6 @@ class FastChannel:
         self.step_name = None
         self.step_seed = None
         self._fast_generator = FastGenerator()
-        self._bitgenerator = None
         self._state_array = None
         if step_name:
             self.begin_step(step_name)
@@ -110,20 +109,10 @@ class FastChannel:
 
         # Seed the bit generators, extracting state along the way
         state_array = np.empty(shape=[len(self.domain_index), 4], dtype=np.uint64)
-        bitgen = None
         for n, i in enumerate(self.domain_index):
             ss = np.random.SeedSequence([self.base_seed, self.channel_seed, self.step_seed, i])
-            bitgen = np.random.PCG64(ss)
-            bstate = bitgen.state["state"]
+            state_array[n, :] = self._fast_generator.get_state_array(ss)
 
-            val_128 = bstate["state"]
-            state_array[n, 0] = val_128 & 0xFFFFFFFFFFFFFFFF
-            state_array[n, 1] = val_128 >> 64
-            val_128 = bstate["inc"]
-            state_array[n, 2] = val_128 & 0xFFFFFFFFFFFFFFFF
-            state_array[n, 3] = val_128 >> 64
-
-        self._bitgenerator = bitgen
         self._state_array = state_array
 
     def end_step(self, step_name: str = "") -> None:
@@ -150,7 +139,6 @@ class FastChannel:
             assert self.step_name == step_name
         self.step_name = None
         self.step_seed = None
-        self._bitgenerator = None
         self._state_array = None
 
     def _check_valid_df(self, df: pd.DataFrame) -> np.ndarray:

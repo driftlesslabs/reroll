@@ -96,7 +96,6 @@ class TestBeginEndStep:
         assert ch.step_name is None
         assert ch.step_seed is None
         assert ch._state_array is None
-        assert ch._bitgenerator is None
 
     def test_end_step_consistency_check_passes(self):
         ch = _make_channel()

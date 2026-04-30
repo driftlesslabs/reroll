@@ -25,7 +25,7 @@ def make_state_array(fg: FastGenerator, n_agents: int, base_seed: int = 0) -> np
     state = np.zeros((n_agents, 4), dtype=np.uint64)
     for i in range(n_agents):
         fg._bit_generator.state = np.random.PCG64(seed=base_seed + i).state
-        state[i] = uint64_view[3:7].copy()
+        state[i] = uint64_view[fg._slice_start : fg._slice_end].copy()
     return state
 
 
