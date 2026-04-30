@@ -1308,6 +1308,16 @@ _state_bytes = np.frombuffer(_FFI.buffer(_state_ptr), dtype=np.uint8)
 _state_uint64 = _state_bytes.view(np.uint64)[3:7]
 
 
+class FastGenerator:
+    def __init__(self, seed: int = 42) -> None:
+        self._bit_generator = np.random.PCG64(seed=seed)
+        self._next_uint64 = self._bit_generator.cffi.next_uint64
+        self._next_double = self._bit_generator.cffi.next_double
+        self._state_address = self._bit_generator.cffi.state_address
+        self._state_ptr = _FFI.cast("uint8_t(*)[128]", _state_address)
+        self._state_bytes = np.frombuffer(_FFI.buffer(_state_ptr), dtype=np.uint8)
+
+
 def _load_ziggurat_tables():
     """Parse the C-comment Ziggurat tables embedded at the top of this module."""
     global _KI_DOUBLE, _WI_DOUBLE, _FI_DOUBLE
