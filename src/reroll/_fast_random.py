@@ -1308,16 +1308,6 @@ _state_bytes = np.frombuffer(_FFI.buffer(_state_ptr), dtype=np.uint8)
 _state_uint64 = _state_bytes.view(np.uint64)[3:7]
 
 
-class FastGenerator:
-    def __init__(self, seed: int = 42) -> None:
-        self._bit_generator = np.random.PCG64(seed=seed)
-        self._next_uint64 = self._bit_generator.cffi.next_uint64
-        self._next_double = self._bit_generator.cffi.next_double
-        self._state_address = self._bit_generator.cffi.state_address
-        self._state_ptr = _FFI.cast("uint8_t(*)[128]", self._state_address)
-        self._state_bytes = np.frombuffer(_FFI.buffer(self._state_ptr), dtype=np.uint8)
-
-
 def _load_ziggurat_tables():
     """Parse the C-comment Ziggurat tables embedded at the top of this module."""
     global _KI_DOUBLE, _WI_DOUBLE, _FI_DOUBLE
@@ -1388,7 +1378,6 @@ def _single_random_standard_normal() -> float:
     exp = math.exp
 
     while True:
-        # r = next_uint64(bitgen_state)
         r = _next_uint64(_state_address)
         idx = r & 0xFF
         r >>= 8
@@ -1794,3 +1783,41 @@ def vector_random_standard_uniform(
         return _vector_random_standard_uniform(
             state_array, state_bytes=_state_bytes, shape=shape
         ).reshape(-1, *shape)
+
+
+class FastGenerator:
+    def __init__(self, seed: int = 42) -> None:
+        self._bit_generator = np.random.PCG64(seed=seed)
+        self._next_uint64 = self._bit_generator.cffi.next_uint64
+        self._next_double = self._bit_generator.cffi.next_double
+        self._state_address = self._bit_generator.cffi.state_address
+        self._state_ptr = _FFI.cast("uint8_t(*)[128]", self._state_address)
+        self._state_bytes = np.frombuffer(_FFI.buffer(self._state_ptr), dtype=np.uint8)
+
+        # Determine the values currently in the `state`
+        state_array = np.empty(shape=[4], dtype=np.uint64)
+        _state = self._bit_generator.state["state"]
+        state_array[0] = _state["state"] & 0xFFFFFFFFFFFFFFFF
+        state_array[1] = _state["state"] >> 64
+        state_array[2] = _state["inc"] & 0xFFFFFFFFFFFFFFFF
+        state_array[3] = _state["inc"] >> 64
+
+        # There are 4 values in state_array, which correspond to 4 values
+        # within _state_bytes.view(np.uint64), in a contiguous block but
+        # not necessarily in the same order.  Find them
+        viewer = self._state_bytes.view(np.uint64)
+        positions = []
+        for j in range(4):
+            target = state_array[j]
+            for k in range(16):
+                if viewer[k] == target:
+                    break
+            if k >= 15:
+                raise ValueError("the state array is not found in raw memory")
+            positions.append(k)
+
+        # Determine where the block of state values is, and verify that it is contiguous
+        self._slice_start = min(positions)
+        self._slice_end = max(positions) + 1
+        if self._slice_start + 4 != self._slice_end:
+            raise ValueError("the state array is not contiguous")
