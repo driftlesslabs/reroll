@@ -1,5 +1,7 @@
 """Tests for vector_random_standard_normal and vector_random_standard_uniform."""
 
+from __future__ import annotations
+
 import numpy as np
 
 from reroll._fast_random import FastGenerator
