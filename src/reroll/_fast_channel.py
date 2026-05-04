@@ -115,6 +115,13 @@ class FastChannel:
         elif self._entropy_type == "quick":
             if self._fast_generator._bit_gen_class == "PCG64":
                 raise ValueError("PCG64 random number generator does not support quick entropy")
+                q1 = quick_entropy(seeds).copy()
+                q2 = q1.copy()
+                q2[:2] = 0
+                self._fast_generator.vector_random_standard_uniform(q2.reshape(1, -1), shape=12)
+                q2[:2] += q1[:2]
+                self._fast_generator.vector_random_standard_uniform(q2.reshape(1, -1), shape=12)
+                return q2
             elif self._fast_generator._bit_gen_class == "SFC64":
                 q = quick_entropy(seeds).copy()
                 q[-1] = 1
