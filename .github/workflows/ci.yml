@@ -7,9 +7,9 @@ on:
   push:
     # Use ["main", "master"] for CI only on the default branch.
     # Use ["**"] for CI on all branches.
-    branches: ["main", "master"]
+    branches: ["**"]
   pull_request:
-    branches: ["main", "master"]
+    branches: ["main"]
 
 permissions:
   contents: read
@@ -58,8 +58,20 @@ jobs:
       - name: Run linting
         run: uv run python devtools/lint.py
 
-      - name: Run memory viewer
-        run: uv run python tests/test_placeholder.py
-
       - name: Run tests
         run: uv run pytest
+
+      - name: Run performance check
+        run: |
+          set -o pipefail
+          uv run devtools/performance-check.py \
+            2>&1 | tee perf-output-${{ matrix.os }}.txt
+
+      - name: Upload output
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          # artifact names must be unique across the matrix, so include the OS
+          name: perf-output-${{ matrix.os }}
+          path: perf-output-${{ matrix.os }}.txt
+          retention-days: 7

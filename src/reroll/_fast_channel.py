@@ -7,8 +7,8 @@ import numpy as np
 import pandas as pd
 from cffi import FFI
 
-from ._entropy import fast_entropy
 from ._fast_random import FastGenerator
+from ._fixed_entropy import fast_entropy
 
 # one more than 0xFFFFFFFF so we can wrap using: int64 % _MAX_SEED
 _MAX_SEED = 1 << 32
