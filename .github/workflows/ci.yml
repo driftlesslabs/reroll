@@ -23,8 +23,14 @@ jobs:
         os: ["ubuntu-latest", "windows-latest"]
         python-version: ["3.11", "3.14"]
 
-    # Linux only by default. Use ${{ matrix.os }} for other OSes.
+    # Run CI tests on Windows and Linux.
     runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        # bash is available on all GitHub-hosted runners (Git Bash on Windows)
+        # and gives us consistent behaviour for tee, path separators, etc.
+        shell: bash
 
     steps:
       # Generally following uv docs:
@@ -45,12 +51,6 @@ jobs:
 
       - name: Set up Python (using uv)
         run: uv python install
-
-      # Alternately can use the official Python action:
-      # - name: Set up Python (using actions/setup-python)
-      #   uses: actions/setup-python@v5
-      #   with:
-      #     python-version: ${{ matrix.python-version }}
 
       - name: Install all dependencies
         run: uv sync --all-extras
